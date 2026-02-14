@@ -1,10 +1,10 @@
 import { StorageService } from '../utils/storage.js';
 
-console.log('AlterEGo Background Service Worker Started');
+console.log('AlterEgo Background Service Worker Started');
 
 // Listen for installation
 chrome.runtime.onInstalled.addListener(async () => {
-    console.log('AlterEGo Installed');
+    console.log('AlterEgo Installed');
     // Initialize default storage if empty
     const personas = await StorageService.getPersonas();
     if (personas.length === 0) {
