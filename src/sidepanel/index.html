@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AlterEgo Side Panel</title>
+</head>
+<body class="bg-gray-100 p-4">
+    <div class="max-w-md mx-auto">
+        <h1 class="text-2xl font-bold mb-4 text-blue-600">AlterEgo</h1>
+        
+        <div id="active-persona-display" class="bg-white p-4 rounded shadow mb-4">
+            <h2 class="text-lg font-semibold">Active Persona</h2>
+            <p id="current-persona-name" class="text-gray-700">None</p>
+        </div>
+
+        <div class="mb-4">
+            <h2 class="text-lg font-semibold mb-2">Switch Persona</h2>
+            <div id="persona-list" class="space-y-2">
+                <!-- Persona items will be injected here -->
+            </div>
+        </div>
+
+        <div class="border-t pt-4">
+            <h2 class="text-lg font-semibold mb-2">Create New Persona</h2>
+            <div class="flex gap-2">
+                <input type="text" id="new-persona-name" placeholder="Persona Name" class="flex-1 p-2 border rounded">
+                <button id="create-persona-btn" class="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600">Add</button>
+            </div>
+        </div>
+    </div>
+    <script type="module" src="main.js"></script>
+</body>
+</html>
