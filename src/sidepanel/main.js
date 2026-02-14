@@ -37,10 +37,18 @@ document.addEventListener('DOMContentLoaded', async () => {
         personas.forEach(persona => {
             const div = document.createElement('div');
             div.className = `p-3 rounded border cursor-pointer flex justify-between items-center ${persona.id === activeId ? 'bg-blue-100 border-blue-300' : 'bg-white hover:bg-gray-50'}`;
-            div.innerHTML = `
-                <span class="font-medium">${persona.name}</span>
-                ${persona.id === activeId ? '<span class="text-blue-600 text-sm font-bold">Active</span>' : ''}
-            `;
+
+            const nameSpan = document.createElement('span');
+            nameSpan.className = 'font-medium';
+            nameSpan.textContent = persona.name;
+            div.appendChild(nameSpan);
+
+            if (persona.id === activeId) {
+                const activeSpan = document.createElement('span');
+                activeSpan.className = 'text-blue-600 text-sm font-bold';
+                activeSpan.textContent = 'Active';
+                div.appendChild(activeSpan);
+            }
             // Prevent rapid clicking or handle it gracefully
             div.addEventListener('click', () => switchPersona(persona.id));
             personaList.appendChild(div);
