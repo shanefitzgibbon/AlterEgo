@@ -66,8 +66,8 @@ chrome.storage.onChanged.addListener(async (changes, area) => {
                         path: cookie.path,
                         secure: cookie.secure,
                         httpOnly: cookie.httpOnly,
-                        expirationDate: cookie.expirationDate,
-                        storeId: cookie.storeId // specific to the browser instance, might need to be omitted or correct
+                        expirationDate: cookie.expirationDate
+                        // Note: storeId is intentionally omitted because it's read-only and tied to the original cookie store.
                         // 'sameSite' might need mapping from string to enum if not matching exactly
                         // but chrome.cookies.getAll returns compatible types mostly.
                     });
