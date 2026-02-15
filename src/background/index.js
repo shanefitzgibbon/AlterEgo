@@ -71,7 +71,7 @@ chrome.storage.onChanged.addListener(async (changes, area) => {
                     };
 
                     // key fix: Do NOT set domain for hostOnly cookies
-                    if (!cookie.hostOnly) {
+                    if (cookie.hostOnly === false) {
                         cookieDetails.domain = cookie.domain;
                     }
 
