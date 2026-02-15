@@ -17,14 +17,9 @@ const VALIDATION_RULES = {
 function validatePersonaName(name, existingPersonas) {
     const trimmedName = name.trim();
     
-    // Check if empty after trim
-    if (trimmedName.length === 0) {
-        return { valid: false, error: 'Persona name cannot be empty' };
-    }
-    
-    // Check minimum length
+    // Check minimum length (also catches empty strings)
     if (trimmedName.length < VALIDATION_RULES.MIN_LENGTH) {
-        return { valid: false, error: `Persona name must be at least ${VALIDATION_RULES.MIN_LENGTH} character(s)` };
+        return { valid: false, error: 'Persona name cannot be empty' };
     }
     
     // Check maximum length
@@ -81,11 +76,11 @@ document.addEventListener('DOMContentLoaded', async () => {
     await renderPersonas();
 
     createBtn.addEventListener('click', async () => {
-        const name = newPersonaInput.value.trim();
+        const inputValue = newPersonaInput.value;
         const personas = await StorageService.getPersonas();
         
         // Validate the persona name
-        const validation = validatePersonaName(name, personas);
+        const validation = validatePersonaName(inputValue, personas);
         
         if (!validation.valid) {
             showError(validation.error);
@@ -95,10 +90,11 @@ document.addEventListener('DOMContentLoaded', async () => {
         // Clear any previous errors
         clearError();
         
-        // Create and save the new persona
+        // Create and save the new persona (use trimmed name from validation)
+        const trimmedName = inputValue.trim();
         const newPersona = {
             id: crypto.randomUUID(),
-            name: name,
+            name: trimmedName,
             created: Date.now()
         };
         personas.push(newPersona);
