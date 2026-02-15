@@ -1,6 +1,71 @@
 import { StorageService } from '../utils/storage.js';
 import '../styles/main.css';
 
+// Validation constants
+const VALIDATION_RULES = {
+    MIN_LENGTH: 1,
+    MAX_LENGTH: 50,
+    ALLOWED_PATTERN: /^[a-zA-Z0-9\s\-_]+$/
+};
+
+/**
+ * Validate persona name
+ * @param {string} name - The persona name to validate
+ * @param {Array} existingPersonas - Array of existing personas
+ * @returns {{valid: boolean, error: string|null}}
+ */
+function validatePersonaName(name, existingPersonas) {
+    const trimmedName = name.trim();
+    
+    // Check minimum length (also catches empty strings)
+    if (trimmedName.length < VALIDATION_RULES.MIN_LENGTH) {
+        return { valid: false, error: 'Persona name cannot be empty' };
+    }
+    
+    // Check maximum length
+    if (trimmedName.length > VALIDATION_RULES.MAX_LENGTH) {
+        return { valid: false, error: `Persona name must not exceed ${VALIDATION_RULES.MAX_LENGTH} characters` };
+    }
+    
+    // Check for allowed characters
+    if (!VALIDATION_RULES.ALLOWED_PATTERN.test(trimmedName)) {
+        return { valid: false, error: 'Persona name can only contain letters, numbers, spaces, hyphens, and underscores' };
+    }
+    
+    // Check for duplicate names (case-insensitive)
+    const isDuplicate = existingPersonas.some(
+        persona => persona.name.toLowerCase() === trimmedName.toLowerCase()
+    );
+    if (isDuplicate) {
+        return { valid: false, error: 'A persona with this name already exists' };
+    }
+    
+    return { valid: true, error: null };
+}
+
+/**
+ * Display error message to user
+ * @param {string} message - Error message to display
+ */
+function showError(message) {
+    const errorDiv = document.getElementById('error-message');
+    errorDiv.textContent = message;
+    errorDiv.classList.remove('hidden');
+    
+    // Auto-hide after 3 seconds
+    setTimeout(() => {
+        errorDiv.classList.add('hidden');
+    }, 3000);
+}
+
+/**
+ * Clear error message
+ */
+function clearError() {
+    const errorDiv = document.getElementById('error-message');
+    errorDiv.classList.add('hidden');
+}
+
 document.addEventListener('DOMContentLoaded', async () => {
     const personaList = document.getElementById('persona-list');
     const createBtn = document.getElementById('create-persona-btn');
@@ -11,19 +76,31 @@ document.addEventListener('DOMContentLoaded', async () => {
     await renderPersonas();
 
     createBtn.addEventListener('click', async () => {
-        const name = newPersonaInput.value.trim();
-        if (name) {
-            const personas = await StorageService.getPersonas();
-            const newPersona = {
-                id: crypto.randomUUID(),
-                name: name,
-                created: Date.now()
-            };
-            personas.push(newPersona);
-            await StorageService.savePersonas(personas);
-            newPersonaInput.value = '';
-            await renderPersonas();
+        const inputValue = newPersonaInput.value;
+        const personas = await StorageService.getPersonas();
+        
+        // Validate the persona name
+        const validation = validatePersonaName(inputValue, personas);
+        
+        if (!validation.valid) {
+            showError(validation.error);
+            return;
         }
+        
+        // Clear any previous errors
+        clearError();
+        
+        // Create and save the new persona (use trimmed name from validation)
+        const trimmedName = inputValue.trim();
+        const newPersona = {
+            id: crypto.randomUUID(),
+            name: trimmedName,
+            created: Date.now()
+        };
+        personas.push(newPersona);
+        await StorageService.savePersonas(personas);
+        newPersonaInput.value = '';
+        await renderPersonas();
     });
 
     async function renderPersonas() {
