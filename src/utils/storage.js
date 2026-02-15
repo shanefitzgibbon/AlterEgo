@@ -70,5 +70,14 @@ export const StorageService = {
     async saveCookies(personaId, cookies) {
         const key = `cookies_${personaId}`;
         await chrome.storage.local.set({ [key]: cookies });
+    },
+
+    /**
+     * Delete cookies for a persona
+     * @param {string} personaId 
+     */
+    async deleteCookies(personaId) {
+        const key = `cookies_${personaId}`;
+        await chrome.storage.local.remove(key);
     }
 };
