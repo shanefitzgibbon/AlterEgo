@@ -29,7 +29,7 @@ This extension requires access to all URLs (`<all_urls>`) for the following reas
 
 1. **Cookie Management Across All Sites**: The extension needs to save and restore cookies from any website you visit. Without access to all URLs, it would only be able to manage cookies for a predefined list of sites, defeating the purpose of persona-based session isolation.
 
-2. **Domain-Wide Cookie Handling**: When you switch personas, the extension must:
+2. **Cross-Domain Cookie Handling**: When you switch personas, the extension must:
    - Save all cookies from the current browsing session (regardless of which websites you visited)
    - Clear all existing cookies and browsing data
    - Restore cookies for the new persona across all domains
