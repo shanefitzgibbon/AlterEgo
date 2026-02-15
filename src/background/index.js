@@ -58,19 +58,24 @@ chrome.storage.onChanged.addListener(async (changes, area) => {
                 const url = `${prefix}${domain}${cookie.path}`;
 
                 try {
-                    await chrome.cookies.set({
+                    const cookieDetails = {
                         url: url,
                         name: cookie.name,
                         value: cookie.value,
-                        domain: cookie.domain,
                         path: cookie.path,
                         secure: cookie.secure,
                         httpOnly: cookie.httpOnly,
-                        expirationDate: cookie.expirationDate
-                        // Note: storeId is intentionally omitted because it's read-only and tied to the original cookie store.
-                        // 'sameSite' might need mapping from string to enum if not matching exactly
-                        // but chrome.cookies.getAll returns compatible types mostly.
-                    });
+                        expirationDate: cookie.expirationDate,
+                        storeId: cookie.storeId,
+                        sameSite: cookie.sameSite
+                    };
+
+                    // key fix: Do NOT set domain for hostOnly cookies
+                    if (!cookie.hostOnly) {
+                        cookieDetails.domain = cookie.domain;
+                    }
+
+                    await chrome.cookies.set(cookieDetails);
                 } catch (err) {
                     console.warn(`Failed to set cookie ${cookie.name} for ${domain}:`, err);
                 }
