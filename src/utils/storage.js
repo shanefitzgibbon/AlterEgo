@@ -5,7 +5,8 @@
 
 const STORAGE_KEYS = {
     PERSONAS: 'personas',
-    ACTIVE_PERSONA_ID: 'activePersonaId'
+    ACTIVE_PERSONA_ID: 'activePersonaId',
+    ALLOWED_HOSTS: 'allowedHosts'
 };
 
 /**
@@ -79,5 +80,22 @@ export const StorageService = {
     async deleteCookies(personaId) {
         const key = `cookies_${personaId}`;
         await chrome.storage.local.remove(key);
+    },
+
+    /**
+     * Get allowed hosts for cookie isolation
+     * @returns {Promise<string[]>}
+     */
+    async getAllowedHosts() {
+        const result = await chrome.storage.local.get(STORAGE_KEYS.ALLOWED_HOSTS);
+        return result[STORAGE_KEYS.ALLOWED_HOSTS] || [];
+    },
+
+    /**
+     * Save allowed hosts for cookie isolation
+     * @param {string[]} hosts
+     */
+    async saveAllowedHosts(hosts) {
+        await chrome.storage.local.set({ [STORAGE_KEYS.ALLOWED_HOSTS]: hosts });
     }
 };
