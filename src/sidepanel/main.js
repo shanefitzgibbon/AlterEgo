@@ -93,7 +93,7 @@ function validateHostname(hostname, existingHosts) {
         return { valid: false, error: 'Hostname cannot be empty' };
     }
 
-    const hostPattern = /^([a-zA-Z0-9]([a-zA-Z0-9\-]*[a-zA-Z0-9])?\.)+[a-zA-Z]{2,}$/;
+    const hostPattern = /^([a-zA-Z0-9]([a-zA-Z0-9\-]*[a-zA-Z0-9])?\.)*[a-zA-Z0-9]([a-zA-Z0-9\-]*[a-zA-Z0-9])?$/;
     if (!hostPattern.test(trimmed)) {
         return { valid: false, error: 'Invalid hostname format (e.g. example.com)' };
     }
@@ -178,7 +178,8 @@ document.addEventListener('DOMContentLoaded', async () => {
             deleteBtn.textContent = '×';
             deleteBtn.title = 'Remove host';
             deleteBtn.addEventListener('click', async () => {
-                const updatedHosts = hosts.filter(h => h !== host);
+                const currentHosts = await StorageService.getAllowedHosts();
+                const updatedHosts = currentHosts.filter(h => h !== host);
                 await StorageService.saveAllowedHosts(updatedHosts);
 
                 // Remove the host permission
