@@ -66,6 +66,45 @@ function clearError() {
     errorDiv.classList.add('hidden');
 }
 
+/**
+ * Display host error message
+ * @param {string} message - Error message to display
+ */
+function showHostError(message) {
+    const errorDiv = document.getElementById('host-error-message');
+    errorDiv.textContent = message;
+    errorDiv.classList.remove('hidden');
+
+    setTimeout(() => {
+        errorDiv.classList.add('hidden');
+    }, 3000);
+}
+
+/**
+ * Validate a hostname string
+ * @param {string} hostname - The hostname to validate
+ * @param {string[]} existingHosts - Already configured hosts
+ * @returns {{valid: boolean, error: string|null}}
+ */
+function validateHostname(hostname, existingHosts) {
+    const trimmed = hostname.trim().toLowerCase();
+
+    if (trimmed.length === 0) {
+        return { valid: false, error: 'Hostname cannot be empty' };
+    }
+
+    const hostPattern = /^([a-zA-Z0-9]([a-zA-Z0-9\-]*[a-zA-Z0-9])?\.)+[a-zA-Z]{2,}$/;
+    if (!hostPattern.test(trimmed)) {
+        return { valid: false, error: 'Invalid hostname format (e.g. example.com)' };
+    }
+
+    if (existingHosts.some(h => h.toLowerCase() === trimmed)) {
+        return { valid: false, error: 'This host is already in the list' };
+    }
+
+    return { valid: true, error: null };
+}
+
 document.addEventListener('DOMContentLoaded', async () => {
     const personaList = document.getElementById('persona-list');
     const createBtn = document.getElementById('create-persona-btn');
@@ -74,6 +113,90 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // Load initial state
     await renderPersonas();
+    await renderHosts();
+
+    // Host management
+    const hostList = document.getElementById('host-list');
+    const addHostBtn = document.getElementById('add-host-btn');
+    const newHostInput = document.getElementById('new-host-input');
+
+    addHostBtn.addEventListener('click', async () => {
+        const hosts = await StorageService.getAllowedHosts();
+        const validation = validateHostname(newHostInput.value, hosts);
+
+        if (!validation.valid) {
+            showHostError(validation.error);
+            return;
+        }
+
+        const hostname = newHostInput.value.trim().toLowerCase();
+
+        // Request host permission from the user
+        try {
+            const granted = await chrome.permissions.request({
+                origins: [`*://${hostname}/*`]
+            });
+
+            if (!granted) {
+                showHostError('Permission was not granted for this host');
+                return;
+            }
+        } catch (err) {
+            showHostError('Failed to request permission: ' + err.message);
+            return;
+        }
+
+        hosts.push(hostname);
+        await StorageService.saveAllowedHosts(hosts);
+        newHostInput.value = '';
+        await renderHosts();
+    });
+
+    async function renderHosts() {
+        const hosts = await StorageService.getAllowedHosts();
+        hostList.innerHTML = '';
+
+        if (hosts.length === 0) {
+            const emptyMsg = document.createElement('p');
+            emptyMsg.className = 'text-sm text-gray-400 italic';
+            emptyMsg.textContent = 'No hosts configured. Add a host to enable cookie isolation.';
+            hostList.appendChild(emptyMsg);
+            return;
+        }
+
+        hosts.forEach(host => {
+            const div = document.createElement('div');
+            div.className = 'p-2 rounded border bg-white flex justify-between items-center';
+
+            const hostSpan = document.createElement('span');
+            hostSpan.className = 'text-sm font-mono';
+            hostSpan.textContent = host;
+            div.appendChild(hostSpan);
+
+            const deleteBtn = document.createElement('button');
+            deleteBtn.className = 'text-red-500 hover:text-red-700 px-2 py-1 text-sm';
+            deleteBtn.textContent = '×';
+            deleteBtn.title = 'Remove host';
+            deleteBtn.addEventListener('click', async () => {
+                const updatedHosts = hosts.filter(h => h !== host);
+                await StorageService.saveAllowedHosts(updatedHosts);
+
+                // Remove the host permission
+                try {
+                    await chrome.permissions.remove({
+                        origins: [`*://${host}/*`]
+                    });
+                } catch (err) {
+                    console.warn('Failed to remove permission for host:', err);
+                }
+
+                await renderHosts();
+            });
+            div.appendChild(deleteBtn);
+
+            hostList.appendChild(div);
+        });
+    }
 
     createBtn.addEventListener('click', async () => {
         const inputValue = newPersonaInput.value;
@@ -180,8 +303,13 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // Listen for changes from other contexts (like if multiple windows open)
     chrome.storage.onChanged.addListener((changes, area) => {
-        if (area === 'local' && (changes.personas || changes.activePersonaId)) {
-            renderPersonas();
+        if (area === 'local') {
+            if (changes.personas || changes.activePersonaId) {
+                renderPersonas();
+            }
+            if (changes.allowedHosts) {
+                renderHosts();
+            }
         }
     });
 });
