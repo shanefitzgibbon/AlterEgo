@@ -116,6 +116,35 @@ function validateHostname(hostname, existingHosts) {
     return { valid: true, error: null, hostname: trimmed };
 }
 
+// Available colors for personas
+const PERSONA_COLORS = [
+    'blue', 'green', 'purple', 'yellow', 'pink',
+    'indigo', 'red', 'orange', 'teal', 'cyan'
+];
+
+/**
+ * Get a random color from the predefined list
+ * @returns {string} One of the available colors
+ */
+function getRandomColor() {
+    return PERSONA_COLORS[Math.floor(Math.random() * PERSONA_COLORS.length)];
+}
+
+// Static map of Tailwind classes per color to avoid dynamic class construction
+// (dynamic classes like `border-${color}-500` are not picked up by Tailwind's scanner)
+const COLOR_CLASSES = {
+    blue:   { activeBorder: 'border-blue-500',   inactiveBorder: 'border-blue-200 hover:border-blue-300',   activeBg: 'bg-blue-50',   activeText: 'text-blue-600' },
+    green:  { activeBorder: 'border-green-500',  inactiveBorder: 'border-green-200 hover:border-green-300',  activeBg: 'bg-green-50',  activeText: 'text-green-600' },
+    purple: { activeBorder: 'border-purple-500', inactiveBorder: 'border-purple-200 hover:border-purple-300', activeBg: 'bg-purple-50', activeText: 'text-purple-600' },
+    yellow: { activeBorder: 'border-yellow-500', inactiveBorder: 'border-yellow-200 hover:border-yellow-300', activeBg: 'bg-yellow-50', activeText: 'text-yellow-600' },
+    pink:   { activeBorder: 'border-pink-500',   inactiveBorder: 'border-pink-200 hover:border-pink-300',   activeBg: 'bg-pink-50',   activeText: 'text-pink-600' },
+    indigo: { activeBorder: 'border-indigo-500', inactiveBorder: 'border-indigo-200 hover:border-indigo-300', activeBg: 'bg-indigo-50', activeText: 'text-indigo-600' },
+    red:    { activeBorder: 'border-red-500',    inactiveBorder: 'border-red-200 hover:border-red-300',    activeBg: 'bg-red-50',    activeText: 'text-red-600' },
+    orange: { activeBorder: 'border-orange-500', inactiveBorder: 'border-orange-200 hover:border-orange-300', activeBg: 'bg-orange-50', activeText: 'text-orange-600' },
+    teal:   { activeBorder: 'border-teal-500',   inactiveBorder: 'border-teal-200 hover:border-teal-300',   activeBg: 'bg-teal-50',   activeText: 'text-teal-600' },
+    cyan:   { activeBorder: 'border-cyan-500',   inactiveBorder: 'border-cyan-200 hover:border-cyan-300',   activeBg: 'bg-cyan-50',   activeText: 'text-cyan-600' },
+};
+
 document.addEventListener('DOMContentLoaded', async () => {
     const personaList = document.getElementById('persona-list');
     const createBtn = document.getElementById('create-persona-btn');
@@ -267,9 +296,10 @@ document.addEventListener('DOMContentLoaded', async () => {
             // Base classes
             let cardClasses = `relative p-4 rounded-xl border-2 hover:shadow-md transition-all duration-200 cursor-pointer group`;
 
-            // Dynamic color classes
-            const borderColorClass = isActive ? `border-${color}-500` : `border-${color}-200 hover:border-${color}-300`;
-            const bgColorClass = isActive ? `bg-${color}-50` : 'bg-white';
+            // Static color class lookup to ensure Tailwind includes all needed classes
+            const colorClasses = COLOR_CLASSES[color] || COLOR_CLASSES.blue;
+            const borderColorClass = isActive ? colorClasses.activeBorder : colorClasses.inactiveBorder;
+            const bgColorClass = isActive ? colorClasses.activeBg : 'bg-white';
 
             card.className = `${cardClasses} ${borderColorClass} ${bgColorClass}`;
             card.addEventListener('click', () => switchPersona(persona.id));
@@ -298,7 +328,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
             if (isActive) {
                 const statusSpan = document.createElement('span');
-                statusSpan.className = `inline-block text-xs font-bold text-${color}-600 mt-1`;
+                statusSpan.className = `inline-block text-xs font-bold ${colorClasses.activeText} mt-1`;
                 statusSpan.textContent = 'Active';
                 details.appendChild(statusSpan);
             }
