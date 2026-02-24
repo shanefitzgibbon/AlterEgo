@@ -2,14 +2,25 @@ import { StorageService } from '../utils/storage.js';
 
 console.log('AlterEgo Background Service Worker Started');
 
+/**
+ * Check if a cookie's domain matches any of the allowed hosts
+ * @param {string} cookieDomain - Cookie domain (may start with '.')
+ * @param {string[]} allowedHosts - List of allowed hostnames
+ * @returns {boolean}
+ */
+function isCookieDomainAllowed(cookieDomain, allowedHosts) {
+    const normalized = cookieDomain.startsWith('.') ? cookieDomain.substring(1) : cookieDomain;
+    return allowedHosts.some(host => {
+        return normalized === host || normalized.endsWith('.' + host);
+    });
+}
+
 // Listen for installation
 chrome.runtime.onInstalled.addListener(async () => {
     console.log('AlterEgo Installed');
     // Initialize default storage if empty
     const personas = await StorageService.getPersonas();
     if (personas.length === 0) {
-        // Create a default "Default" persona? Or leave empty.
-        // Let's leave it empty or maybe just rely on the user to create one.
         console.log('No personas found. Initial state.');
     }
 });
@@ -26,33 +37,75 @@ chrome.storage.onChanged.addListener(async (changes, area) => {
 
         console.log(`Switching persona from ${oldPersonaId} to ${newPersonaId}`);
 
-        // 1. Save current cookies to the old persona (if any)
-        if (oldPersonaId) {
-            const currentCookies = await chrome.cookies.getAll({});
-            await StorageService.saveCookies(oldPersonaId, currentCookies);
-            console.log(`Saved ${currentCookies.length} cookies for persona ${oldPersonaId}`);
+        // Get configured allowed hosts
+        const allowedHosts = await StorageService.getAllowedHosts();
+
+        if (allowedHosts.length === 0) {
+            console.log('No allowed hosts configured. Skipping cookie isolation.');
+            return;
         }
 
-        // 2. Clear current session (Cookies & LocalStorage)
-        // Note: Clearing localStorage ensures isolation but data is lost since we don't restore it yet.
+        // Get the current active tab to scope cookie operations
+        const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
+        const activeTab = tabs[0];
+        let activeTabHost = null;
+
+        if (activeTab && activeTab.url) {
+            try {
+                activeTabHost = new URL(activeTab.url).hostname;
+            } catch (e) {
+                console.warn('Could not parse active tab URL:', e);
+            }
+        }
+
+        // Only proceed if the active tab's host is in the allowed list
+        if (!activeTabHost || !isCookieDomainAllowed(activeTabHost, allowedHosts)) {
+            console.log(`Active tab host "${activeTabHost}" is not in the allowed hosts list. Skipping.`);
+            return;
+        }
+
+        // Determine hosts to manage: only the active tab's host (scoped to current tab)
+        const hostsToManage = [activeTabHost];
+
+        // 1. Save current cookies for the active tab's host to the old persona
+        if (oldPersonaId) {
+            const allCookies = await chrome.cookies.getAll({});
+            const currentHostCookies = allCookies.filter(
+                cookie => isCookieDomainAllowed(cookie.domain, hostsToManage)
+            );
+
+            // Merge with any previously saved cookies for other hosts
+            const existingSavedCookies = await StorageService.getCookies(oldPersonaId);
+            const otherHostCookies = existingSavedCookies.filter(
+                cookie => !isCookieDomainAllowed(cookie.domain, hostsToManage)
+            );
+            const mergedCookies = [...otherHostCookies, ...currentHostCookies];
+
+            await StorageService.saveCookies(oldPersonaId, mergedCookies);
+            console.log(`Saved ${currentHostCookies.length} cookies for host ${activeTabHost} (persona ${oldPersonaId})`);
+        }
+
+        // 2. Clear cookies only for the active tab's host
+        const origins = hostsToManage.flatMap(host => [`https://${host}`, `http://${host}`]);
         await chrome.browsingData.remove(
-            { since: 0 },
+            { origins: origins },
             {
                 cookies: true,
                 localStorage: true,
                 cache: true
             }
         );
-        console.log('Cleared browsing data');
+        console.log(`Cleared browsing data for ${activeTabHost}`);
 
-        // 3. Restore cookies for the new persona
+        // 3. Restore cookies for the new persona (only for the active tab's host)
         if (newPersonaId) {
             const savedCookies = await StorageService.getCookies(newPersonaId);
-            console.log(`Restoring ${savedCookies.length} cookies for persona ${newPersonaId}`);
+            const filteredCookies = savedCookies.filter(
+                cookie => isCookieDomainAllowed(cookie.domain, hostsToManage)
+            );
+            console.log(`Restoring ${filteredCookies.length} cookies for host ${activeTabHost} (persona ${newPersonaId})`);
 
-            for (const cookie of savedCookies) {
-                // chrome.cookies.set requires a URL, but the cookie object has domain/path.
-                // We need to construct a valid URL.
+            for (const cookie of filteredCookies) {
                 const prefix = cookie.secure ? 'https://' : 'http://';
                 const domain = cookie.domain.startsWith('.') ? cookie.domain.substring(1) : cookie.domain;
                 const url = `${prefix}${domain}${cookie.path}`;
@@ -82,7 +135,6 @@ chrome.storage.onChanged.addListener(async (changes, area) => {
             }
         }
 
-        // Notify user (optional, maybe via badge or runtime message)
         console.log('Persona switch complete.');
     }
 });

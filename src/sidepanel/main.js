@@ -16,22 +16,22 @@ const VALIDATION_RULES = {
  */
 function validatePersonaName(name, existingPersonas) {
     const trimmedName = name.trim();
-    
+
     // Check minimum length (also catches empty strings)
     if (trimmedName.length < VALIDATION_RULES.MIN_LENGTH) {
         return { valid: false, error: 'Persona name cannot be empty' };
     }
-    
+
     // Check maximum length
     if (trimmedName.length > VALIDATION_RULES.MAX_LENGTH) {
         return { valid: false, error: `Persona name must not exceed ${VALIDATION_RULES.MAX_LENGTH} characters` };
     }
-    
+
     // Check for allowed characters
     if (!VALIDATION_RULES.ALLOWED_PATTERN.test(trimmedName)) {
         return { valid: false, error: 'Persona name can only contain letters, numbers, spaces, hyphens, and underscores' };
     }
-    
+
     // Check for duplicate names (case-insensitive)
     const isDuplicate = existingPersonas.some(
         persona => persona.name.toLowerCase() === trimmedName.toLowerCase()
@@ -39,7 +39,7 @@ function validatePersonaName(name, existingPersonas) {
     if (isDuplicate) {
         return { valid: false, error: 'A persona with this name already exists' };
     }
-    
+
     return { valid: true, error: null };
 }
 
@@ -51,7 +51,7 @@ function showError(message) {
     const errorDiv = document.getElementById('error-message');
     errorDiv.textContent = message;
     errorDiv.classList.remove('hidden');
-    
+
     // Auto-hide after 3 seconds
     setTimeout(() => {
         errorDiv.classList.add('hidden');
@@ -66,30 +66,165 @@ function clearError() {
     errorDiv.classList.add('hidden');
 }
 
+/**
+ * Display host error message
+ * @param {string} message - Error message to display
+ */
+function showHostError(message) {
+    const errorDiv = document.getElementById('host-error-message');
+    errorDiv.textContent = message;
+    errorDiv.classList.remove('hidden');
+
+    setTimeout(() => {
+        errorDiv.classList.add('hidden');
+    }, 3000);
+}
+
+/**
+ * Validate a hostname string
+ * @param {string} hostname - The hostname to validate
+ * @param {string[]} existingHosts - Already configured hosts
+ * @returns {{valid: boolean, error: string|null}}
+ */
+function validateHostname(hostname, existingHosts) {
+    let trimmed = hostname.trim().toLowerCase();
+
+    if (trimmed.length === 0) {
+        return { valid: false, error: 'Hostname cannot be empty' };
+    }
+
+    // Strip protocol prefixes (e.g. https://example.com -> example.com)
+    trimmed = trimmed.replace(/^https?:\/\//, '');
+    // Strip paths, query strings, and fragments (e.g. example.com/path -> example.com)
+    trimmed = trimmed.replace(/[\/\?#].*$/, '');
+    // Strip port numbers (e.g. example.com:8080 -> example.com)
+    trimmed = trimmed.replace(/:\d+$/, '');
+
+    if (trimmed.length === 0) {
+        return { valid: false, error: 'Hostname cannot be empty' };
+    }
+
+    const hostPattern = /^([a-zA-Z0-9]([a-zA-Z0-9\-]*[a-zA-Z0-9])?\.)*[a-zA-Z0-9]([a-zA-Z0-9\-]*[a-zA-Z0-9])?$/;
+    if (!hostPattern.test(trimmed)) {
+        return { valid: false, error: 'Invalid hostname format (e.g. example.com)' };
+    }
+
+    if (existingHosts.some(h => h.toLowerCase() === trimmed)) {
+        return { valid: false, error: 'This host is already in the list' };
+    }
+
+    return { valid: true, error: null, hostname: trimmed };
+}
+
 document.addEventListener('DOMContentLoaded', async () => {
     const personaList = document.getElementById('persona-list');
     const createBtn = document.getElementById('create-persona-btn');
     const newPersonaInput = document.getElementById('new-persona-name');
     const currentPersonaName = document.getElementById('current-persona-name');
 
+    // Host management
+    const hostList = document.getElementById('host-list');
+    const addHostBtn = document.getElementById('add-host-btn');
+    const newHostInput = document.getElementById('new-host-input');
+
     // Load initial state
     await renderPersonas();
+    await renderHosts();
+
+    addHostBtn.addEventListener('click', async () => {
+        const hosts = await StorageService.getAllowedHosts();
+        const validation = validateHostname(newHostInput.value, hosts);
+
+        if (!validation.valid) {
+            showHostError(validation.error);
+            return;
+        }
+
+        const hostname = validation.hostname;
+
+        // Request host permission from the user
+        try {
+            const granted = await chrome.permissions.request({
+                origins: [`*://${hostname}/*`]
+            });
+
+            if (!granted) {
+                showHostError('Permission was not granted for this host');
+                return;
+            }
+        } catch (err) {
+            showHostError('Failed to request permission: ' + err.message);
+            return;
+        }
+
+        hosts.push(hostname);
+        await StorageService.saveAllowedHosts(hosts);
+        newHostInput.value = '';
+        await renderHosts();
+    });
+
+    async function renderHosts() {
+        const hosts = await StorageService.getAllowedHosts();
+        hostList.innerHTML = '';
+
+        if (hosts.length === 0) {
+            const emptyMsg = document.createElement('p');
+            emptyMsg.className = 'text-sm text-gray-400 italic';
+            emptyMsg.textContent = 'No hosts configured. Add a host to enable cookie isolation.';
+            hostList.appendChild(emptyMsg);
+            return;
+        }
+
+        hosts.forEach(host => {
+            const div = document.createElement('div');
+            div.className = 'p-2 rounded border bg-white flex justify-between items-center';
+
+            const hostSpan = document.createElement('span');
+            hostSpan.className = 'text-sm font-mono';
+            hostSpan.textContent = host;
+            div.appendChild(hostSpan);
+
+            const deleteBtn = document.createElement('button');
+            deleteBtn.className = 'text-red-500 hover:text-red-700 px-2 py-1 text-sm';
+            deleteBtn.textContent = '×';
+            deleteBtn.title = 'Remove host';
+            deleteBtn.addEventListener('click', async () => {
+                const currentHosts = await StorageService.getAllowedHosts();
+                const updatedHosts = currentHosts.filter(h => h !== host);
+                await StorageService.saveAllowedHosts(updatedHosts);
+
+                // Remove the host permission
+                try {
+                    await chrome.permissions.remove({
+                        origins: [`*://${host}/*`]
+                    });
+                } catch (err) {
+                    console.warn('Failed to remove permission for host:', err);
+                }
+
+                await renderHosts();
+            });
+            div.appendChild(deleteBtn);
+
+            hostList.appendChild(div);
+        });
+    }
 
     createBtn.addEventListener('click', async () => {
         const inputValue = newPersonaInput.value;
         const personas = await StorageService.getPersonas();
-        
+
         // Validate the persona name
         const validation = validatePersonaName(inputValue, personas);
-        
+
         if (!validation.valid) {
             showError(validation.error);
             return;
         }
-        
+
         // Clear any previous errors
         clearError();
-        
+
         // Create and save the new persona (use trimmed name from validation)
         const trimmedName = inputValue.trim();
         const newPersona = {
@@ -180,8 +315,13 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // Listen for changes from other contexts (like if multiple windows open)
     chrome.storage.onChanged.addListener((changes, area) => {
-        if (area === 'local' && (changes.personas || changes.activePersonaId)) {
-            renderPersonas();
+        if (area === 'local') {
+            if (changes.personas || changes.activePersonaId) {
+                renderPersonas();
+            }
+            if (changes.allowedHosts) {
+                renderHosts();
+            }
         }
     });
 });

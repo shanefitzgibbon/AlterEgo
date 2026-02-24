@@ -21,6 +21,19 @@
             </div>
         </div>
 
+        <div class="border-t pt-4 mb-4">
+            <h2 class="text-lg font-semibold mb-2">Managed Hosts</h2>
+            <p class="text-sm text-gray-500 mb-2">Only cookies from these hosts will be isolated per persona.</p>
+            <div id="host-error-message" class="hidden bg-red-100 border border-red-400 text-red-700 px-4 py-2 rounded mb-2 text-sm"></div>
+            <div id="host-list" class="space-y-2 mb-2">
+                <!-- Host items will be injected here -->
+            </div>
+            <div class="flex gap-2">
+                <input type="text" id="new-host-input" placeholder="e.g. example.com" class="flex-1 p-2 border rounded">
+                <button id="add-host-btn" class="bg-green-500 text-white px-4 py-2 rounded hover:bg-green-600">Add</button>
+            </div>
+        </div>
+
         <div class="border-t pt-4">
             <h2 class="text-lg font-semibold mb-2">Create New Persona</h2>
             <div id="error-message" class="hidden bg-red-100 border border-red-400 text-red-700 px-4 py-2 rounded mb-2 text-sm"></div>
