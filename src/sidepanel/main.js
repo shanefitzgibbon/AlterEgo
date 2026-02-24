@@ -16,22 +16,22 @@ const VALIDATION_RULES = {
  */
 function validatePersonaName(name, existingPersonas) {
     const trimmedName = name.trim();
-    
+
     // Check minimum length (also catches empty strings)
     if (trimmedName.length < VALIDATION_RULES.MIN_LENGTH) {
         return { valid: false, error: 'Persona name cannot be empty' };
     }
-    
+
     // Check maximum length
     if (trimmedName.length > VALIDATION_RULES.MAX_LENGTH) {
         return { valid: false, error: `Persona name must not exceed ${VALIDATION_RULES.MAX_LENGTH} characters` };
     }
-    
+
     // Check for allowed characters
     if (!VALIDATION_RULES.ALLOWED_PATTERN.test(trimmedName)) {
         return { valid: false, error: 'Persona name can only contain letters, numbers, spaces, hyphens, and underscores' };
     }
-    
+
     // Check for duplicate names (case-insensitive)
     const isDuplicate = existingPersonas.some(
         persona => persona.name.toLowerCase() === trimmedName.toLowerCase()
@@ -39,7 +39,7 @@ function validatePersonaName(name, existingPersonas) {
     if (isDuplicate) {
         return { valid: false, error: 'A persona with this name already exists' };
     }
-    
+
     return { valid: true, error: null };
 }
 
@@ -51,7 +51,7 @@ function showError(message) {
     const errorDiv = document.getElementById('error-message');
     errorDiv.textContent = message;
     errorDiv.classList.remove('hidden');
-    
+
     // Auto-hide after 3 seconds
     setTimeout(() => {
         errorDiv.classList.add('hidden');
@@ -87,7 +87,18 @@ function showHostError(message) {
  * @returns {{valid: boolean, error: string|null}}
  */
 function validateHostname(hostname, existingHosts) {
-    const trimmed = hostname.trim().toLowerCase();
+    let trimmed = hostname.trim().toLowerCase();
+
+    if (trimmed.length === 0) {
+        return { valid: false, error: 'Hostname cannot be empty' };
+    }
+
+    // Strip protocol prefixes (e.g. https://example.com -> example.com)
+    trimmed = trimmed.replace(/^https?:\/\//, '');
+    // Strip paths, query strings, and fragments (e.g. example.com/path -> example.com)
+    trimmed = trimmed.replace(/[\/\?#].*$/, '');
+    // Strip port numbers (e.g. example.com:8080 -> example.com)
+    trimmed = trimmed.replace(/:\d+$/, '');
 
     if (trimmed.length === 0) {
         return { valid: false, error: 'Hostname cannot be empty' };
@@ -102,7 +113,7 @@ function validateHostname(hostname, existingHosts) {
         return { valid: false, error: 'This host is already in the list' };
     }
 
-    return { valid: true, error: null };
+    return { valid: true, error: null, hostname: trimmed };
 }
 
 document.addEventListener('DOMContentLoaded', async () => {
@@ -111,14 +122,14 @@ document.addEventListener('DOMContentLoaded', async () => {
     const newPersonaInput = document.getElementById('new-persona-name');
     const currentPersonaName = document.getElementById('current-persona-name');
 
-    // Load initial state
-    await renderPersonas();
-    await renderHosts();
-
     // Host management
     const hostList = document.getElementById('host-list');
     const addHostBtn = document.getElementById('add-host-btn');
     const newHostInput = document.getElementById('new-host-input');
+
+    // Load initial state
+    await renderPersonas();
+    await renderHosts();
 
     addHostBtn.addEventListener('click', async () => {
         const hosts = await StorageService.getAllowedHosts();
@@ -129,7 +140,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             return;
         }
 
-        const hostname = newHostInput.value.trim().toLowerCase();
+        const hostname = validation.hostname;
 
         // Request host permission from the user
         try {
@@ -202,18 +213,18 @@ document.addEventListener('DOMContentLoaded', async () => {
     createBtn.addEventListener('click', async () => {
         const inputValue = newPersonaInput.value;
         const personas = await StorageService.getPersonas();
-        
+
         // Validate the persona name
         const validation = validatePersonaName(inputValue, personas);
-        
+
         if (!validation.valid) {
             showError(validation.error);
             return;
         }
-        
+
         // Clear any previous errors
         clearError();
-        
+
         // Create and save the new persona (use trimmed name from validation)
         const trimmedName = inputValue.trim();
         const newPersona = {
