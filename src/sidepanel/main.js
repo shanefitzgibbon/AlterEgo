@@ -116,20 +116,6 @@ function validateHostname(hostname, existingHosts) {
     return { valid: true, error: null, hostname: trimmed };
 }
 
-// Available colors for personas
-const PERSONA_COLORS = [
-    'blue', 'green', 'purple', 'yellow', 'pink',
-    'indigo', 'red', 'orange', 'teal', 'cyan'
-];
-
-/**
- * Get a random color from the predefined list
- * @returns {string} One of the available colors
- */
-function getRandomColor() {
-    return PERSONA_COLORS[Math.floor(Math.random() * PERSONA_COLORS.length)];
-}
-
 document.addEventListener('DOMContentLoaded', async () => {
     const personaList = document.getElementById('persona-list');
     const createBtn = document.getElementById('create-persona-btn');
@@ -176,6 +162,53 @@ document.addEventListener('DOMContentLoaded', async () => {
         newHostInput.value = '';
         await renderHosts();
     });
+
+    async function renderHosts() {
+        const hosts = await StorageService.getAllowedHosts();
+        hostList.innerHTML = '';
+
+        if (hosts.length === 0) {
+            const emptyMsg = document.createElement('p');
+            emptyMsg.className = 'text-sm text-gray-400 italic';
+            emptyMsg.textContent = 'No hosts configured. Add a host to enable cookie isolation.';
+            hostList.appendChild(emptyMsg);
+            return;
+        }
+
+        hosts.forEach(host => {
+            const div = document.createElement('div');
+            div.className = 'p-2 rounded border bg-white flex justify-between items-center';
+
+            const hostSpan = document.createElement('span');
+            hostSpan.className = 'text-sm font-mono';
+            hostSpan.textContent = host;
+            div.appendChild(hostSpan);
+
+            const deleteBtn = document.createElement('button');
+            deleteBtn.className = 'text-red-500 hover:text-red-700 px-2 py-1 text-sm';
+            deleteBtn.textContent = '×';
+            deleteBtn.title = 'Remove host';
+            deleteBtn.addEventListener('click', async () => {
+                const currentHosts = await StorageService.getAllowedHosts();
+                const updatedHosts = currentHosts.filter(h => h !== host);
+                await StorageService.saveAllowedHosts(updatedHosts);
+
+                // Remove the host permission
+                try {
+                    await chrome.permissions.remove({
+                        origins: [`*://${host}/*`]
+                    });
+                } catch (err) {
+                    console.warn('Failed to remove permission for host:', err);
+                }
+
+                await renderHosts();
+            });
+            div.appendChild(deleteBtn);
+
+            hostList.appendChild(div);
+        });
+    }
 
     createBtn.addEventListener('click', async () => {
         const inputValue = newPersonaInput.value;

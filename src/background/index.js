@@ -21,8 +21,6 @@ chrome.runtime.onInstalled.addListener(async () => {
     // Initialize default storage if empty
     const personas = await StorageService.getPersonas();
     if (personas.length === 0) {
-        // Create a default "Default" persona? Or leave empty.
-        // Let's leave it empty or maybe just rely on the user to create one.
         console.log('No personas found. Initial state.');
     }
 });
