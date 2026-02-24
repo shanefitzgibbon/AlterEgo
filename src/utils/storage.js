@@ -14,6 +14,7 @@ const STORAGE_KEYS = {
  * @property {string} id
  * @property {string} name
  * @property {string} color
+ * @property {number} created
  * @property {Object} [sessionData] - Placeholder for session specific data if needed
  */
 

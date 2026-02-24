@@ -84,7 +84,7 @@ function showHostError(message) {
  * Validate a hostname string
  * @param {string} hostname - The hostname to validate
  * @param {string[]} existingHosts - Already configured hosts
- * @returns {{valid: boolean, error: string|null}}
+ * @returns {{valid: boolean, error: string|null, hostname?: string}}
  */
 function validateHostname(hostname, existingHosts) {
     let trimmed = hostname.trim().toLowerCase();
@@ -230,6 +230,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         const newPersona = {
             id: crypto.randomUUID(),
             name: trimmedName,
+            color: getRandomColor(),
             created: Date.now()
         };
         personas.push(newPersona);
@@ -246,50 +247,107 @@ document.addEventListener('DOMContentLoaded', async () => {
         currentPersonaName.textContent = activePersona ? activePersona.name : 'Default / None';
 
         personaList.innerHTML = '';
-        personas.forEach(persona => {
-            const div = document.createElement('div');
-            div.className = `p-3 rounded border flex justify-between items-center ${persona.id === activeId ? 'bg-blue-100 border-blue-300' : 'bg-white hover:bg-gray-50'}`;
-
-            const leftSection = document.createElement('div');
-            leftSection.className = 'flex-1 cursor-pointer';
-            leftSection.addEventListener('click', () => switchPersona(persona.id));
-
-            const nameSpan = document.createElement('span');
-            nameSpan.className = 'font-medium';
-            nameSpan.textContent = persona.name;
-            leftSection.appendChild(nameSpan);
-
-            div.appendChild(leftSection);
-
-            const rightSection = document.createElement('div');
-            rightSection.className = 'flex items-center gap-2';
-
-            if (persona.id === activeId) {
-                const activeSpan = document.createElement('span');
-                activeSpan.className = 'text-blue-600 text-sm font-bold';
-                activeSpan.textContent = 'Active';
-                rightSection.appendChild(activeSpan);
+        personas.forEach((persona) => {
+            // Assign a color if existing persona doesn't have one
+            if (!persona.color) {
+                // Deterministic color based on ID to ensure stability
+                let hash = 0;
+                for (let i = 0; i < persona.id.length; i++) {
+                    hash = persona.id.charCodeAt(i) + ((hash << 5) - hash);
+                }
+                const index = Math.abs(hash) % PERSONA_COLORS.length;
+                persona.color = PERSONA_COLORS[index];
             }
 
+            const isActive = persona.id === activeId;
+            const color = persona.color;
+
+            // Card container
+            const card = document.createElement('div');
+            // Base classes
+            let cardClasses = `relative p-4 rounded-xl border-2 hover:shadow-md transition-all duration-200 cursor-pointer group`;
+
+            // Dynamic color classes
+            const borderColorClass = isActive ? `border-${color}-500` : `border-${color}-200 hover:border-${color}-300`;
+            const bgColorClass = isActive ? `bg-${color}-50` : 'bg-white';
+
+            card.className = `${cardClasses} ${borderColorClass} ${bgColorClass}`;
+            card.addEventListener('click', () => switchPersona(persona.id));
+
+            // Inner layout
+            const innerLayout = document.createElement('div');
+            innerLayout.className = 'flex items-center gap-4';
+
+            // Image
+            const imgContainer = document.createElement('div');
+            const img = document.createElement('img');
+            img.src = `https://i.pravatar.cc/150?u=${persona.id}`;
+            img.alt = persona.name;
+            img.className = 'w-12 h-12 rounded-full object-cover border-2 border-white shadow-sm';
+            imgContainer.appendChild(img);
+            innerLayout.appendChild(imgContainer);
+
+            // Details section
+            const details = document.createElement('div');
+            details.className = 'flex-1 min-w-0'; // min-w-0 for text truncation to work
+
+            const nameEl = document.createElement('h3');
+            nameEl.className = 'font-semibold text-gray-900 truncate';
+            nameEl.textContent = persona.name;
+            details.appendChild(nameEl);
+
+            if (isActive) {
+                const statusSpan = document.createElement('span');
+                statusSpan.className = `inline-block text-xs font-bold text-${color}-600 mt-1`;
+                statusSpan.textContent = 'Active';
+                details.appendChild(statusSpan);
+            }
+
+            innerLayout.appendChild(details);
+            card.appendChild(innerLayout);
+
+            // Delete button (positioned absolute top-right)
             const deleteBtn = document.createElement('button');
-            deleteBtn.className = 'text-red-500 hover:text-red-700 px-2 py-1 text-sm';
-            deleteBtn.textContent = '×';
+            deleteBtn.className = 'absolute top-2 right-2 p-1.5 rounded-full text-gray-400 hover:text-red-500 hover:bg-red-50 opacity-0 group-hover:opacity-100 transition-opacity';
+            deleteBtn.innerHTML = `
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                </svg>
+            `;
             deleteBtn.title = 'Delete persona';
             deleteBtn.addEventListener('click', (e) => {
                 e.stopPropagation();
                 deletePersona(persona.id);
             });
-            rightSection.appendChild(deleteBtn);
+            card.appendChild(deleteBtn);
 
-            div.appendChild(rightSection);
-            personaList.appendChild(div);
+            personaList.appendChild(card);
         });
     }
 
     async function switchPersona(id) {
+        // Get the current active persona ID before switching
+        const currentId = await StorageService.getActivePersonaId();
+
+        // If they click the already active one, do nothing
+        if (id === currentId) return;
+
         await StorageService.setActivePersonaId(id);
-        // The background script listens to storage changes and handles the actual isolation
+
+        // The background script listens to storage changes and handles the actual isolation.
+        // After switching, ask the user if they want to refresh the current tab.
         await renderPersonas();
+
+        // Small delay to ensure storage change has been processed by background script
+        // though chrome.storage is asynchronous anyway.
+        setTimeout(async () => {
+            const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
+            if (tabs[0]) {
+                if (confirm('Persona switched. Would you like to refresh the current tab to apply changes?')) {
+                    chrome.tabs.reload(tabs[0].id);
+                }
+            }
+        }, 100);
     }
 
     async function deletePersona(id) {
@@ -311,6 +369,53 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
 
         await renderPersonas();
+    }
+
+    async function renderHosts() {
+        const hosts = await StorageService.getAllowedHosts();
+        hostList.innerHTML = '';
+
+        if (hosts.length === 0) {
+            const emptyMsg = document.createElement('p');
+            emptyMsg.className = 'text-sm text-gray-400 italic';
+            emptyMsg.textContent = 'No hosts configured. Add a host to enable cookie isolation.';
+            hostList.appendChild(emptyMsg);
+            return;
+        }
+
+        hosts.forEach(host => {
+            const div = document.createElement('div');
+            div.className = 'p-2 rounded border bg-white flex justify-between items-center';
+
+            const hostSpan = document.createElement('span');
+            hostSpan.className = 'text-sm font-mono';
+            hostSpan.textContent = host;
+            div.appendChild(hostSpan);
+
+            const deleteBtn = document.createElement('button');
+            deleteBtn.className = 'text-red-500 hover:text-red-700 px-2 py-1 text-sm';
+            deleteBtn.textContent = '×';
+            deleteBtn.title = 'Remove host';
+            deleteBtn.addEventListener('click', async () => {
+                const currentHosts = await StorageService.getAllowedHosts();
+                const updatedHosts = currentHosts.filter(h => h !== host);
+                await StorageService.saveAllowedHosts(updatedHosts);
+
+                // Remove the host permission
+                try {
+                    await chrome.permissions.remove({
+                        origins: [`*://${host}/*`]
+                    });
+                } catch (err) {
+                    console.warn('Failed to remove permission for host:', err);
+                }
+
+                await renderHosts();
+            });
+            div.appendChild(deleteBtn);
+
+            hostList.appendChild(div);
+        });
     }
 
     // Listen for changes from other contexts (like if multiple windows open)

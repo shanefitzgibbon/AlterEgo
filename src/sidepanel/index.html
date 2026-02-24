@@ -1,14 +1,16 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>AlterEgo Side Panel</title>
 </head>
+
 <body class="bg-gray-100 p-4">
     <div class="max-w-md mx-auto">
         <h1 class="text-2xl font-bold mb-4 text-blue-600">AlterEgo</h1>
-        
+
         <div id="active-persona-display" class="bg-white p-4 rounded shadow mb-4">
             <h2 class="text-lg font-semibold">Active Persona</h2>
             <p id="current-persona-name" class="text-gray-700">None</p>
@@ -21,28 +23,33 @@
             </div>
         </div>
 
-        <div class="border-t pt-4 mb-4">
-            <h2 class="text-lg font-semibold mb-2">Managed Hosts</h2>
-            <p class="text-sm text-gray-500 mb-2">Only cookies from these hosts will be isolated per persona.</p>
-            <div id="host-error-message" class="hidden bg-red-100 border border-red-400 text-red-700 px-4 py-2 rounded mb-2 text-sm"></div>
-            <div id="host-list" class="space-y-2 mb-2">
+        <div id="managed-hosts-section" class="border-t pt-4 mb-4">
+            <h2 class="text-lg font-semibold mb-2">Approved Hosts</h2>
+            <p class="text-xs text-gray-500 mb-2">Cookies will only be isolated for these domains.</p>
+            <div id="host-error-message"
+                class="hidden bg-red-100 border border-red-400 text-red-700 px-4 py-2 rounded mb-2 text-sm"></div>
+            <div id="host-list" class="space-y-2 mb-3">
                 <!-- Host items will be injected here -->
             </div>
             <div class="flex gap-2">
                 <input type="text" id="new-host-input" placeholder="e.g. example.com" class="flex-1 p-2 border rounded">
-                <button id="add-host-btn" class="bg-green-500 text-white px-4 py-2 rounded hover:bg-green-600">Add</button>
+                <button id="add-host-btn"
+                    class="bg-green-500 text-white px-4 py-2 rounded hover:bg-green-600">Add</button>
             </div>
         </div>
 
         <div class="border-t pt-4">
             <h2 class="text-lg font-semibold mb-2">Create New Persona</h2>
-            <div id="error-message" class="hidden bg-red-100 border border-red-400 text-red-700 px-4 py-2 rounded mb-2 text-sm"></div>
+            <div id="error-message"
+                class="hidden bg-red-100 border border-red-400 text-red-700 px-4 py-2 rounded mb-2 text-sm"></div>
             <div class="flex gap-2">
                 <input type="text" id="new-persona-name" placeholder="Persona Name" class="flex-1 p-2 border rounded">
-                <button id="create-persona-btn" class="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600">Add</button>
+                <button id="create-persona-btn"
+                    class="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600">Add</button>
             </div>
         </div>
     </div>
     <script type="module" src="main.js"></script>
 </body>
+
 </html>
