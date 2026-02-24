@@ -66,6 +66,56 @@ function clearError() {
     errorDiv.classList.add('hidden');
 }
 
+/**
+ * Display host error message
+ * @param {string} message - Error message to display
+ */
+function showHostError(message) {
+    const errorDiv = document.getElementById('host-error-message');
+    errorDiv.textContent = message;
+    errorDiv.classList.remove('hidden');
+
+    setTimeout(() => {
+        errorDiv.classList.add('hidden');
+    }, 3000);
+}
+
+/**
+ * Validate a hostname string
+ * @param {string} hostname - The hostname to validate
+ * @param {string[]} existingHosts - Already configured hosts
+ * @returns {{valid: boolean, error: string|null, hostname?: string}}
+ */
+function validateHostname(hostname, existingHosts) {
+    let trimmed = hostname.trim().toLowerCase();
+
+    if (trimmed.length === 0) {
+        return { valid: false, error: 'Hostname cannot be empty' };
+    }
+
+    // Strip protocol prefixes (e.g. https://example.com -> example.com)
+    trimmed = trimmed.replace(/^https?:\/\//, '');
+    // Strip paths, query strings, and fragments (e.g. example.com/path -> example.com)
+    trimmed = trimmed.replace(/[\/\?#].*$/, '');
+    // Strip port numbers (e.g. example.com:8080 -> example.com)
+    trimmed = trimmed.replace(/:\d+$/, '');
+
+    if (trimmed.length === 0) {
+        return { valid: false, error: 'Hostname cannot be empty' };
+    }
+
+    const hostPattern = /^([a-zA-Z0-9]([a-zA-Z0-9\-]*[a-zA-Z0-9])?\.)*[a-zA-Z0-9]([a-zA-Z0-9\-]*[a-zA-Z0-9])?$/;
+    if (!hostPattern.test(trimmed)) {
+        return { valid: false, error: 'Invalid hostname format (e.g. example.com)' };
+    }
+
+    if (existingHosts.some(h => h.toLowerCase() === trimmed)) {
+        return { valid: false, error: 'This host is already in the list' };
+    }
+
+    return { valid: true, error: null, hostname: trimmed };
+}
+
 // Available colors for personas
 const PERSONA_COLORS = [
     'blue', 'green', 'purple', 'yellow', 'pink',
@@ -86,8 +136,46 @@ document.addEventListener('DOMContentLoaded', async () => {
     const newPersonaInput = document.getElementById('new-persona-name');
     const currentPersonaName = document.getElementById('current-persona-name');
 
+    // Host management
+    const hostList = document.getElementById('host-list');
+    const addHostBtn = document.getElementById('add-host-btn');
+    const newHostInput = document.getElementById('new-host-input');
+
     // Load initial state
     await renderPersonas();
+    await renderHosts();
+
+    addHostBtn.addEventListener('click', async () => {
+        const hosts = await StorageService.getAllowedHosts();
+        const validation = validateHostname(newHostInput.value, hosts);
+
+        if (!validation.valid) {
+            showHostError(validation.error);
+            return;
+        }
+
+        const hostname = validation.hostname;
+
+        // Request host permission from the user
+        try {
+            const granted = await chrome.permissions.request({
+                origins: [`*://${hostname}/*`]
+            });
+
+            if (!granted) {
+                showHostError('Permission was not granted for this host');
+                return;
+            }
+        } catch (err) {
+            showHostError('Failed to request permission: ' + err.message);
+            return;
+        }
+
+        hosts.push(hostname);
+        await StorageService.saveAllowedHosts(hosts);
+        newHostInput.value = '';
+        await renderHosts();
+    });
 
     createBtn.addEventListener('click', async () => {
         const inputValue = newPersonaInput.value;
@@ -205,9 +293,28 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     async function switchPersona(id) {
+        // Get the current active persona ID before switching
+        const currentId = await StorageService.getActivePersonaId();
+
+        // If they click the already active one, do nothing
+        if (id === currentId) return;
+
         await StorageService.setActivePersonaId(id);
-        // The background script listens to storage changes and handles the actual isolation
+
+        // The background script listens to storage changes and handles the actual isolation.
+        // After switching, ask the user if they want to refresh the current tab.
         await renderPersonas();
+
+        // Small delay to ensure storage change has been processed by background script
+        // though chrome.storage is asynchronous anyway.
+        setTimeout(async () => {
+            const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
+            if (tabs[0]) {
+                if (confirm('Persona switched. Would you like to refresh the current tab to apply changes?')) {
+                    chrome.tabs.reload(tabs[0].id);
+                }
+            }
+        }, 100);
     }
 
     async function deletePersona(id) {
@@ -231,10 +338,62 @@ document.addEventListener('DOMContentLoaded', async () => {
         await renderPersonas();
     }
 
+    async function renderHosts() {
+        const hosts = await StorageService.getAllowedHosts();
+        hostList.innerHTML = '';
+
+        if (hosts.length === 0) {
+            const emptyMsg = document.createElement('p');
+            emptyMsg.className = 'text-sm text-gray-400 italic';
+            emptyMsg.textContent = 'No hosts configured. Add a host to enable cookie isolation.';
+            hostList.appendChild(emptyMsg);
+            return;
+        }
+
+        hosts.forEach(host => {
+            const div = document.createElement('div');
+            div.className = 'p-2 rounded border bg-white flex justify-between items-center';
+
+            const hostSpan = document.createElement('span');
+            hostSpan.className = 'text-sm font-mono';
+            hostSpan.textContent = host;
+            div.appendChild(hostSpan);
+
+            const deleteBtn = document.createElement('button');
+            deleteBtn.className = 'text-red-500 hover:text-red-700 px-2 py-1 text-sm';
+            deleteBtn.textContent = '×';
+            deleteBtn.title = 'Remove host';
+            deleteBtn.addEventListener('click', async () => {
+                const currentHosts = await StorageService.getAllowedHosts();
+                const updatedHosts = currentHosts.filter(h => h !== host);
+                await StorageService.saveAllowedHosts(updatedHosts);
+
+                // Remove the host permission
+                try {
+                    await chrome.permissions.remove({
+                        origins: [`*://${host}/*`]
+                    });
+                } catch (err) {
+                    console.warn('Failed to remove permission for host:', err);
+                }
+
+                await renderHosts();
+            });
+            div.appendChild(deleteBtn);
+
+            hostList.appendChild(div);
+        });
+    }
+
     // Listen for changes from other contexts (like if multiple windows open)
     chrome.storage.onChanged.addListener((changes, area) => {
-        if (area === 'local' && (changes.personas || changes.activePersonaId)) {
-            renderPersonas();
+        if (area === 'local') {
+            if (changes.personas || changes.activePersonaId) {
+                renderPersonas();
+            }
+            if (changes.allowedHosts) {
+                renderHosts();
+            }
         }
     });
 });
