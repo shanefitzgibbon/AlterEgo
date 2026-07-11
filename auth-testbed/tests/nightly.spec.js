@@ -9,8 +9,11 @@ test('site c oauth redirect callback', async ({ request }) => {
 });
 
 test('site e refresh rotation', async ({ request }) => {
+  const csrf = await request.get('http://localhost:3041/csrf');
+  const csrfBody = await csrf.json();
   const login = await request.post('http://localhost:3041/login', {
-    data: { username: 'alice', password: 'password123' }
+    data: { username: 'alice', password: 'password123' },
+    headers: { 'x-csrf-token': csrfBody.data.csrfToken }
   });
   const loginBody = await login.json();
   expect(loginBody.ok).toBeTruthy();
@@ -20,7 +23,9 @@ test('site e refresh rotation', async ({ request }) => {
   });
   expect(me.ok()).toBeTruthy();
 
-  const refresh = await request.post('http://localhost:3041/refresh');
+  const refresh = await request.post('http://localhost:3041/refresh', {
+    headers: { 'x-csrf-token': csrfBody.data.csrfToken }
+  });
   const refreshBody = await refresh.json();
   expect(refreshBody.ok).toBeTruthy();
 

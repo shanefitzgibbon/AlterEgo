@@ -4,6 +4,7 @@ const crypto = require('crypto');
 const { authenticate } = require('../../common/fixtures');
 const { ok, fail } = require('../../common/response');
 const { SessionStore } = require('../../common/session-store');
+const { createRateLimiter, installCsrf } = require('../../common/security');
 
 const app = express();
 const sessions = new SessionStore();
@@ -16,10 +17,12 @@ const MFA_CODE = '000999';
 
 app.use(express.json());
 app.use(cookieParser());
+installCsrf(app);
+const authLimiter = createRateLimiter({ windowMs: 60_000, max: 20 });
 
 app.get('/', (_req, res) => res.type('text/plain').send('Site D MFA step-up auth'));
 
-app.post('/login', (req, res) => {
+app.post('/login', authLimiter, (req, res) => {
   const { username, password } = req.body || {};
   const user = authenticate(username, password);
   if (!user) return fail(res, 401, 'BAD_CREDENTIALS', 'Invalid credentials');
@@ -36,7 +39,7 @@ app.post('/login', (req, res) => {
   return ok(res, { mfaRequired: true, challengeId, deterministicCode: MFA_CODE });
 });
 
-app.post('/mfa/verify', (req, res) => {
+app.post('/mfa/verify', authLimiter, (req, res) => {
   const { challengeId, code, rememberDevice = false } = req.body || {};
   const challenge = challenges.get(challengeId);
   if (!challenge || challenge.expiresAt < Date.now()) {
@@ -74,6 +77,11 @@ app.post('/logout', (req, res) => {
   sessions.destroy(req.cookies[SESSION_COOKIE]);
   res.clearCookie(SESSION_COOKIE);
   return ok(res, { loggedOut: true });
+});
+
+app.post('/force-expire', (req, res) => {
+  sessions.forceExpire(req.cookies[SESSION_COOKIE]);
+  return ok(res, { expired: true });
 });
 
 function start(port = 3031) {

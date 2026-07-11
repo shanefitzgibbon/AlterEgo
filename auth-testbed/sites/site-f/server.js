@@ -4,6 +4,7 @@ const crypto = require('crypto');
 const { authenticate } = require('../../common/fixtures');
 const { ok, fail } = require('../../common/response');
 const { SessionStore } = require('../../common/session-store');
+const { createRateLimiter, installCsrf, safeRedirect } = require('../../common/security');
 
 const app = express();
 const sessions = new SessionStore();
@@ -13,6 +14,8 @@ const CSRF_COOKIE = 'site_f_csrf';
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 app.use(cookieParser());
+installCsrf(app, { cookieName: CSRF_COOKIE });
+const authLimiter = createRateLimiter({ windowMs: 60_000, max: 20 });
 
 app.get('/', (_req, res) => res.type('text/plain').send('Site F enterprise auth variants'));
 
@@ -30,7 +33,7 @@ app.get('/login', (_req, res) => {
 </body></html>`);
 });
 
-app.post('/login', (req, res) => {
+app.post('/login', authLimiter, (req, res) => {
   const csrfBody = req.body.csrf;
   const csrfCookie = req.cookies[CSRF_COOKIE];
   if (!csrfBody || !csrfCookie || csrfBody !== csrfCookie) {
@@ -46,14 +49,14 @@ app.post('/login', (req, res) => {
 });
 
 app.get('/sso/sp', (req, res) => {
-  const returnTo = req.query.returnTo || '/protected';
+  const returnTo = safeRedirect(String(req.query.returnTo || ''), [], '/protected');
   const relay = encodeURIComponent(returnTo);
   return res.redirect(`/sso/idp?user=alice&RelayState=${relay}`);
 });
 
-app.get('/sso/idp', (req, res) => {
+app.get('/sso/idp', authLimiter, (req, res) => {
   const username = req.query.user || 'alice';
-  const relayState = req.query.RelayState || '/protected';
+  const relayState = safeRedirect(String(req.query.RelayState || ''), [], '/protected');
   const user = authenticate(username, 'password123');
   if (!user) return fail(res, 401, 'BAD_CREDENTIALS', 'Invalid user');
 
@@ -78,6 +81,11 @@ app.post('/logout', (req, res) => {
   sessions.destroy(req.cookies[COOKIE_NAME]);
   res.clearCookie(COOKIE_NAME);
   return ok(res, { loggedOut: true });
+});
+
+app.post('/force-expire', (req, res) => {
+  sessions.forceExpire(req.cookies[COOKIE_NAME]);
+  return ok(res, { expired: true });
 });
 
 function start(port = 3051) {

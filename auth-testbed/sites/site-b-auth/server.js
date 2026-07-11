@@ -1,9 +1,11 @@
 const express = require('express');
 const cookieParser = require('cookie-parser');
+const crypto = require('crypto');
 const { authenticate } = require('../../common/fixtures');
 const { ok, fail } = require('../../common/response');
 const { SessionStore } = require('../../common/session-store');
 const { DEFAULT_POLICY } = require('../../common/constants');
+const { createRateLimiter, installCsrf, escapeHtml, safeRedirect } = require('../../common/security');
 
 const app = express();
 const sessions = new SessionStore();
@@ -13,27 +15,33 @@ const COOKIE_DOMAIN = process.env.SITE_B_COOKIE_DOMAIN || '.localtest.me';
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 app.use(cookieParser());
+installCsrf(app);
+const authLimiter = createRateLimiter({ windowMs: 60_000, max: 20 });
+const allowedOrigins = (process.env.SITE_B_ALLOWED_REDIRECT_ORIGINS || 'http://localhost:3012,http://app.localtest.me:3012').split(',');
 
 app.get('/', (_req, res) => res.type('text/plain').send('Site B auth service'));
 
 app.get('/login', (req, res) => {
-  const returnTo = req.query.returnTo || 'http://app.localtest.me:3012/';
+  const returnTo = safeRedirect(String(req.query.returnTo || ''), allowedOrigins, 'http://app.localtest.me:3012/');
+  const csrfToken = req.cookies.csrf_token || crypto.randomBytes(16).toString('hex');
+  res.cookie('csrf_token', csrfToken, { httpOnly: false, sameSite: 'lax' });
   res.type('html').send(`<!doctype html><html><body>
 <h1>Site B Login</h1>
 <form method="post" action="/login">
 <input name="username" value="alice" />
 <input name="password" value="password123" type="password" />
 <input name="rememberMe" value="true" />
-<input name="returnTo" value="${returnTo}" />
+<input name="csrf" value="${escapeHtml(csrfToken)}" type="hidden" />
+<input name="returnTo" value="${escapeHtml(returnTo)}" />
 <button type="submit">Login</button>
 </form>
 </body></html>`);
 });
 
-app.post('/login', (req, res) => {
+app.post('/login', authLimiter, (req, res) => {
   const { username, password } = req.body;
   const rememberMe = String(req.body.rememberMe) === 'true';
-  const returnTo = req.body.returnTo || 'http://app.localtest.me:3012/';
+  const returnTo = safeRedirect(String(req.body.returnTo || ''), allowedOrigins, 'http://app.localtest.me:3012/');
   const user = authenticate(username, password);
   if (!user) return fail(res, 401, 'BAD_CREDENTIALS', 'Invalid credentials');
 

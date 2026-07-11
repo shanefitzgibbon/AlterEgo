@@ -7,8 +7,8 @@ param registryServer string
 @description('Container image tag (single image running different SITE values)')
 param imageTag string = 'latest'
 
-@description('Key Vault resource ID used for secret references')
-param keyVaultResourceId string
+@description('Key Vault URI used for secret references (for example https://myvault.vault.azure.net, without trailing slash)')
+param keyVaultUri string
 
 var siteNames = [
   'site-a'
@@ -41,7 +41,7 @@ resource containerApps 'Microsoft.App/containerApps@2024-03-01' = [for site in s
       secrets: [
         {
           name: 'site-c-client-secret'
-          keyVaultUrl: '${keyVaultResourceId}/secrets/site-c-client-secret'
+          keyVaultUrl: '${keyVaultUri}/secrets/site-c-client-secret'
           identity: 'system'
         }
       ]

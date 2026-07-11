@@ -6,7 +6,10 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "auth-testbed:start": "npm --prefix auth-testbed run start:all",
+    "auth-testbed:test:smoke": "npm --prefix auth-testbed run test:smoke",
+    "auth-testbed:test:nightly": "npm --prefix auth-testbed run test:nightly"
   },
   "keywords": [],
   "author": "",

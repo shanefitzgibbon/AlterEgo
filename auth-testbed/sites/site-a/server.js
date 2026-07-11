@@ -4,6 +4,7 @@ const { authenticate, FIXTURE_USERS } = require('../../common/fixtures');
 const { ok, fail } = require('../../common/response');
 const { SessionStore } = require('../../common/session-store');
 const { DEFAULT_POLICY } = require('../../common/constants');
+const { createRateLimiter, installCsrf } = require('../../common/security');
 
 const app = express();
 const sessions = new SessionStore();
@@ -11,6 +12,8 @@ const COOKIE_NAME = 'site_a_sid';
 
 app.use(express.json());
 app.use(cookieParser());
+installCsrf(app);
+const authLimiter = createRateLimiter({ windowMs: 60_000, max: 20 });
 
 function getSession(req) {
   return sessions.getSession(req.cookies[COOKIE_NAME]);
@@ -27,7 +30,7 @@ app.get('/', (_req, res) => {
   res.type('text/plain').send('Site A: classic cookie/session auth');
 });
 
-app.post('/login', (req, res) => {
+app.post('/login', authLimiter, (req, res) => {
   const { username, password, rememberMe = false } = req.body || {};
   const user = authenticate(username, password);
   if (!user) return fail(res, 401, 'BAD_CREDENTIALS', 'Invalid credentials');

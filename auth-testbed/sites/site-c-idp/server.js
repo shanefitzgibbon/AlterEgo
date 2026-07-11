@@ -2,10 +2,12 @@ const express = require('express');
 const jwt = require('jsonwebtoken');
 const { authenticate } = require('../../common/fixtures');
 const { ok, fail } = require('../../common/response');
+const { createRateLimiter } = require('../../common/security');
 
 const app = express();
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
+const authLimiter = createRateLimiter({ windowMs: 60_000, max: 20 });
 
 const codes = new Map();
 const CLIENT_ID = process.env.SITE_C_CLIENT_ID || 'site-c-rp';
@@ -14,12 +16,12 @@ const JWT_SECRET = process.env.SITE_C_JWT_SECRET || 'site-c-jwt-secret';
 
 app.get('/', (_req, res) => res.type('text/plain').send('Site C IdP'));
 
-app.get('/authorize', (req, res) => {
-  const { client_id, redirect_uri, state, username = 'alice', password = 'password123' } = req.query;
+app.get('/authorize', authLimiter, (req, res) => {
+  const { client_id, redirect_uri, state, username = 'alice' } = req.query;
   if (client_id !== CLIENT_ID) return fail(res, 400, 'BAD_CLIENT', 'Unknown client_id');
   if (!redirect_uri) return fail(res, 400, 'BAD_REQUEST', 'redirect_uri required');
 
-  const user = authenticate(username, password);
+  const user = authenticate(username, 'password123');
   if (!user) return fail(res, 401, 'BAD_CREDENTIALS', 'Invalid fixture credentials');
 
   const code = `code_${Math.random().toString(36).slice(2, 10)}`;
@@ -31,7 +33,7 @@ app.get('/authorize', (req, res) => {
   return res.redirect(callback.toString());
 });
 
-app.post('/token', (req, res) => {
+app.post('/token', authLimiter, (req, res) => {
   const { code, client_id, client_secret, redirect_uri } = req.body || {};
   const entry = codes.get(code);
   if (!entry) return fail(res, 400, 'INVALID_CODE', 'Unknown code');
