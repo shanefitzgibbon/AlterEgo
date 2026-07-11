@@ -1,0 +1,27 @@
+{
+  "name": "auth-testbed",
+  "version": "1.0.0",
+  "description": "Simple multi-site auth test bed for integration tests",
+  "main": "index.js",
+  "scripts": {
+    "start:all": "node index.js",
+    "start:site": "node start-site.js",
+    "test": "playwright test",
+    "test:smoke": "playwright test tests/smoke.spec.js",
+    "test:nightly": "playwright test tests/nightly.spec.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "cookie-parser": "^1.4.7",
+    "express": "^5.2.1",
+    "express-rate-limit": "^8.5.2",
+    "jsonwebtoken": "^9.0.3"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.61.1",
+    "playwright": "^1.61.1"
+  }
+}

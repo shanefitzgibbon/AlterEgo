@@ -1,3 +1,6 @@
 node_modules
 dist
 .DS_Store
+auth-testbed/node_modules
+auth-testbed/test-results
+auth-testbed/playwright-report

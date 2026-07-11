@@ -54,3 +54,9 @@ This extension requires access to all URLs (`<all_urls>`) for the following reas
 1. Click the AlterEgo icon in your browser toolbar to open the side panel
 2. Create a new persona or switch between existing ones
 3. Your cookies and browsing data will be automatically saved and restored when switching personas
+
+## Auth integration test bed
+
+This repository now includes `auth-testbed`, a set of simple auth sites that exercise common login/session patterns for integration testing.
+
+See `auth-testbed/README.md` for local run instructions, site details, integration matrix, and Azure deployment artifacts.
