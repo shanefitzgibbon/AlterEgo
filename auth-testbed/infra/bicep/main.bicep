@@ -19,6 +19,7 @@ var siteNames = [
   'site-c-rp'
   'site-d'
   'site-e-api'
+  'site-e-spa'
   'site-f'
 ]
 
@@ -38,13 +39,15 @@ resource containerApps 'Microsoft.App/containerApps@2024-03-01' = [for site in s
         external: true
         targetPort: 8080
       }
-      secrets: [
-        {
-          name: 'site-c-client-secret'
-          keyVaultUrl: '${keyVaultUri}/secrets/site-c-client-secret'
-          identity: 'system'
-        }
-      ]
+      secrets: contains(['site-c-idp', 'site-c-rp'], site)
+        ? [
+            {
+              name: 'site-c-client-secret'
+              keyVaultUrl: '${keyVaultUri}/secrets/site-c-client-secret'
+              identity: 'system'
+            }
+          ]
+        : []
     }
     template: {
       containers: [

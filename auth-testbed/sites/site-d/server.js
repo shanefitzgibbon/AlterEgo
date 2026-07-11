@@ -1,10 +1,11 @@
 const express = require('express');
 const cookieParser = require('cookie-parser');
 const crypto = require('crypto');
+const rateLimit = require('express-rate-limit');
 const { authenticate } = require('../../common/fixtures');
 const { ok, fail } = require('../../common/response');
 const { SessionStore } = require('../../common/session-store');
-const { createRateLimiter, installCsrf } = require('../../common/security');
+const { installCsrf } = require('../../common/security');
 
 const app = express();
 const sessions = new SessionStore();
@@ -18,7 +19,7 @@ const MFA_CODE = '000999';
 app.use(express.json());
 app.use(cookieParser());
 installCsrf(app);
-const authLimiter = createRateLimiter({ windowMs: 60_000, max: 20 });
+const authLimiter = rateLimit({ windowMs: 60_000, limit: 20, standardHeaders: true, legacyHeaders: false });
 
 app.get('/', (_req, res) => res.type('text/plain').send('Site D MFA step-up auth'));
 

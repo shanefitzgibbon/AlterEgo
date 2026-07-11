@@ -1,18 +1,22 @@
 const express = require('express');
 const jwt = require('jsonwebtoken');
+const crypto = require('crypto');
+const rateLimit = require('express-rate-limit');
 const { authenticate } = require('../../common/fixtures');
 const { ok, fail } = require('../../common/response');
-const { createRateLimiter } = require('../../common/security');
 
 const app = express();
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
-const authLimiter = createRateLimiter({ windowMs: 60_000, max: 20 });
+const authLimiter = rateLimit({ windowMs: 60_000, limit: 20, standardHeaders: true, legacyHeaders: false });
 
 const codes = new Map();
 const CLIENT_ID = process.env.SITE_C_CLIENT_ID || 'site-c-rp';
 const CLIENT_SECRET = process.env.SITE_C_CLIENT_SECRET || 'site-c-secret';
-const JWT_SECRET = process.env.SITE_C_JWT_SECRET || 'site-c-jwt-secret';
+const JWT_SECRET = process.env.SITE_C_JWT_SECRET || crypto.randomBytes(32).toString('hex');
+if (!process.env.SITE_C_JWT_SECRET) {
+  console.warn('SITE_C_JWT_SECRET not set; using ephemeral secret for this process');
+}
 
 app.get('/', (_req, res) => res.type('text/plain').send('Site C IdP'));
 
@@ -24,7 +28,7 @@ app.get('/authorize', authLimiter, (req, res) => {
   const user = authenticate(username, 'password123');
   if (!user) return fail(res, 401, 'BAD_CREDENTIALS', 'Invalid fixture credentials');
 
-  const code = `code_${Math.random().toString(36).slice(2, 10)}`;
+  const code = `code_${crypto.randomBytes(8).toString('hex')}`;
   codes.set(code, { user, clientId: client_id, redirectUri: redirect_uri, expiresAt: Date.now() + 60_000 });
 
   const callback = new URL(redirect_uri);

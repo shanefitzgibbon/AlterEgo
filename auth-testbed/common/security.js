@@ -9,28 +9,6 @@ function escapeHtml(input) {
     .replaceAll("'", '&#39;');
 }
 
-function createRateLimiter({ windowMs = 60_000, max = 30 } = {}) {
-  const hits = new Map();
-  return (req, res, next) => {
-    const key = `${req.ip || 'unknown'}:${req.path}`;
-    const now = Date.now();
-    const entry = hits.get(key) || { count: 0, resetAt: now + windowMs };
-    if (now > entry.resetAt) {
-      entry.count = 0;
-      entry.resetAt = now + windowMs;
-    }
-    entry.count += 1;
-    hits.set(key, entry);
-
-    if (entry.count > max) {
-      res.status(429).json({ ok: false, data: null, error: { code: 'RATE_LIMITED', message: 'Too many requests', details: null } });
-      return;
-    }
-
-    next();
-  };
-}
-
 function installCsrf(app, { cookieName = 'csrf_token' } = {}) {
   app.get('/csrf', (_req, res) => {
     const token = crypto.randomBytes(16).toString('hex');
@@ -46,7 +24,15 @@ function installCsrf(app, { cookieName = 'csrf_token' } = {}) {
     const bodyToken = req.body?.csrf;
     const token = headerToken || bodyToken;
 
-    if (!cookieToken || !token || cookieToken !== token) {
+    const cookieBuf = cookieToken ? Buffer.from(cookieToken) : null;
+    const tokenBuf = token ? Buffer.from(token) : null;
+    const isValid =
+      cookieBuf &&
+      tokenBuf &&
+      cookieBuf.length === tokenBuf.length &&
+      crypto.timingSafeEqual(cookieBuf, tokenBuf);
+
+    if (!isValid) {
       return res.status(403).json({ ok: false, data: null, error: { code: 'CSRF_INVALID', message: 'CSRF token mismatch', details: null } });
     }
 
@@ -65,4 +51,4 @@ function safeRedirect(target, allowedOrigins = [], fallback = '/') {
   return fallback;
 }
 
-module.exports = { escapeHtml, createRateLimiter, installCsrf, safeRedirect };
+module.exports = { escapeHtml, installCsrf, safeRedirect };

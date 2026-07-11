@@ -1,8 +1,10 @@
 const express = require('express');
 const cookieParser = require('cookie-parser');
+const crypto = require('crypto');
+const rateLimit = require('express-rate-limit');
 const { ok, fail } = require('../../common/response');
 const { SessionStore } = require('../../common/session-store');
-const { createRateLimiter, installCsrf } = require('../../common/security');
+const { installCsrf } = require('../../common/security');
 
 const app = express();
 const sessions = new SessionStore();
@@ -16,18 +18,17 @@ const COOKIE_NAME = 'site_c_sid';
 app.use(express.json());
 app.use(cookieParser());
 installCsrf(app);
-const authLimiter = createRateLimiter({ windowMs: 60_000, max: 20 });
+const authLimiter = rateLimit({ windowMs: 60_000, limit: 20, standardHeaders: true, legacyHeaders: false });
 
 app.get('/', (_req, res) => res.type('text/plain').send('Site C RP'));
 
 app.get('/login', authLimiter, (_req, res) => {
-  const state = Math.random().toString(36).slice(2, 12);
+  const state = crypto.randomBytes(12).toString('hex');
   const authUrl = new URL(`${IDP_URL}/authorize`);
   authUrl.searchParams.set('client_id', CLIENT_ID);
   authUrl.searchParams.set('redirect_uri', `${RP_URL}/callback`);
   authUrl.searchParams.set('state', state);
   authUrl.searchParams.set('username', 'alice');
-  authUrl.searchParams.set('password', 'password123');
   return res.redirect(authUrl.toString());
 });
 

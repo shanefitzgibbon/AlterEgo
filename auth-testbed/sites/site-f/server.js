@@ -1,21 +1,24 @@
 const express = require('express');
 const cookieParser = require('cookie-parser');
 const crypto = require('crypto');
+const rateLimit = require('express-rate-limit');
 const { authenticate } = require('../../common/fixtures');
 const { ok, fail } = require('../../common/response');
 const { SessionStore } = require('../../common/session-store');
-const { createRateLimiter, installCsrf, safeRedirect } = require('../../common/security');
+const { installCsrf, safeRedirect } = require('../../common/security');
 
 const app = express();
 const sessions = new SessionStore();
 const COOKIE_NAME = 'site_f_sid';
 const CSRF_COOKIE = 'site_f_csrf';
+const COOKIE_SECURE = process.env.SITE_F_COOKIE_SECURE === 'true';
+const ALLOWED_RETURN_PATHS = new Set(['/', '/protected']);
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 app.use(cookieParser());
 installCsrf(app, { cookieName: CSRF_COOKIE });
-const authLimiter = createRateLimiter({ windowMs: 60_000, max: 20 });
+const authLimiter = rateLimit({ windowMs: 60_000, limit: 20, standardHeaders: true, legacyHeaders: false });
 
 app.get('/', (_req, res) => res.type('text/plain').send('Site F enterprise auth variants'));
 
@@ -44,24 +47,26 @@ app.post('/login', authLimiter, (req, res) => {
   if (!user) return fail(res, 401, 'BAD_CREDENTIALS', 'Invalid credentials');
 
   const session = sessions.createSession(user, { ttlMs: 15 * 60 * 1000, idleTimeoutMs: 5 * 60 * 1000 });
-  res.cookie(COOKIE_NAME, session.id, { httpOnly: true, sameSite: 'strict', secure: false });
+  res.cookie(COOKIE_NAME, session.id, { httpOnly: true, sameSite: 'strict', secure: COOKIE_SECURE });
   return ok(res, { user, authPattern: 'csrf-form-login' });
 });
 
 app.get('/sso/sp', (req, res) => {
-  const returnTo = safeRedirect(String(req.query.returnTo || ''), [], '/protected');
+  const requested = safeRedirect(String(req.query.returnTo || ''), [], '/protected');
+  const returnTo = ALLOWED_RETURN_PATHS.has(requested) ? requested : '/protected';
   const relay = encodeURIComponent(returnTo);
   return res.redirect(`/sso/idp?user=alice&RelayState=${relay}`);
 });
 
 app.get('/sso/idp', authLimiter, (req, res) => {
   const username = req.query.user || 'alice';
-  const relayState = safeRedirect(String(req.query.RelayState || ''), [], '/protected');
+  const requestedRelay = safeRedirect(String(req.query.RelayState || ''), [], '/protected');
+  const relayState = ALLOWED_RETURN_PATHS.has(requestedRelay) ? requestedRelay : '/protected';
   const user = authenticate(username, 'password123');
   if (!user) return fail(res, 401, 'BAD_CREDENTIALS', 'Invalid user');
 
   const session = sessions.createSession(user, { ttlMs: 15 * 60 * 1000, idleTimeoutMs: 5 * 60 * 1000, metadata: { pattern: 'idp-initiated' } });
-  res.cookie(COOKIE_NAME, session.id, { httpOnly: true, sameSite: 'strict' });
+  res.cookie(COOKIE_NAME, session.id, { httpOnly: true, sameSite: 'strict', secure: COOKIE_SECURE });
   return res.redirect(relayState);
 });
 

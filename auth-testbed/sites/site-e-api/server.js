@@ -2,17 +2,24 @@ const express = require('express');
 const cookieParser = require('cookie-parser');
 const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
+const rateLimit = require('express-rate-limit');
 const { authenticate } = require('../../common/fixtures');
 const { ok, fail } = require('../../common/response');
-const { createRateLimiter, installCsrf } = require('../../common/security');
+const { installCsrf } = require('../../common/security');
 
 const app = express();
 app.use(express.json());
 app.use(cookieParser());
 installCsrf(app);
-const authLimiter = createRateLimiter({ windowMs: 60_000, max: 20 });
+const authLimiter = rateLimit({ windowMs: 60_000, limit: 20, standardHeaders: true, legacyHeaders: false });
 
-const JWT_SECRET = process.env.SITE_E_JWT_SECRET || 'site-e-jwt-secret';
+const JWT_SECRET = process.env.SITE_E_JWT_SECRET || (process.env.NODE_ENV === 'production' ? null : crypto.randomBytes(32).toString('hex'));
+if (!JWT_SECRET) {
+  throw new Error('SITE_E_JWT_SECRET is required in production');
+}
+if (!process.env.SITE_E_JWT_SECRET && process.env.NODE_ENV !== 'production') {
+  console.warn('SITE_E_JWT_SECRET not set; using ephemeral secret for this process');
+}
 const ACCESS_TTL_SECONDS = Number(process.env.SITE_E_ACCESS_TTL_SECONDS || 60);
 const REFRESH_COOKIE = 'site_e_refresh';
 const refreshStore = new Map();
@@ -59,7 +66,7 @@ app.post('/refresh', authLimiter, (req, res) => {
   return ok(res, { accessToken, expiresIn: ACCESS_TTL_SECONDS, rotated: true });
 });
 
-app.get('/me', (req, res) => {
+app.get('/me', authLimiter, (req, res) => {
   const auth = req.headers.authorization || '';
   const token = auth.startsWith('Bearer ') ? auth.slice(7) : null;
   if (!token) return fail(res, 401, 'UNAUTHENTICATED', 'Authorization header required');
@@ -72,7 +79,7 @@ app.get('/me', (req, res) => {
   }
 });
 
-app.get('/protected', (req, res) => {
+app.get('/protected', authLimiter, (req, res) => {
   const auth = req.headers.authorization || '';
   const token = auth.startsWith('Bearer ') ? auth.slice(7) : null;
   if (!token) return fail(res, 401, 'UNAUTHENTICATED', 'Authorization header required');

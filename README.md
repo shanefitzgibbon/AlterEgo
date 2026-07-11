@@ -57,6 +57,6 @@ This extension requires access to all URLs (`<all_urls>`) for the following reas
 
 ## Auth integration test bed
 
-This repository now includes `/home/runner/work/AlterEgo/AlterEgo/auth-testbed`, a set of simple auth sites that exercise common login/session patterns for integration testing.
+This repository now includes `auth-testbed`, a set of simple auth sites that exercise common login/session patterns for integration testing.
 
-See `/home/runner/work/AlterEgo/AlterEgo/auth-testbed/README.md` for local run instructions, site details, integration matrix, and Azure deployment artifacts.
+See `auth-testbed/README.md` for local run instructions, site details, integration matrix, and Azure deployment artifacts.
